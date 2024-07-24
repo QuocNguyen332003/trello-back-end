@@ -1,32 +1,53 @@
-/**
- * Updated by trungquandev.com's author on August 17 2023
- * YouTube: https://youtube.com/@trungquandev
- * "A bit of fragrance clings to the hand that gives flowers!"
- */
-
+import cors from 'cors'
+import { corsOptions } from './config/cors'
 import express from 'express'
-import { mapOrder } from '~/utils/sorts.js'
+import exitHook from 'async-exit-hook'
+import { CONNECT_DB, CLOSE_DB } from './config/mongodb'
+import { env } from '~/config/environment'
+import { APIs_V1 } from '~/routes/v1/index'
+import { errorHandlingMiddleware } from './middlewares/errorHandlingMiddleware'
+import cookieParser from 'cookie-parser'
 
-const app = express()
+const START_SERVER = () => {
+  const app = express()
+  // Xử lí Cors
+  app.use(cors(corsOptions))
 
-const hostname = 'localhost'
-const port = 8017
+  // Enable req.body json data
+  app.use(express.json())
+  app.use(cookieParser())
 
-app.get('/', (req, res) => {
-  // Test Absolute import mapOrder
-  console.log(mapOrder(
-    [ { id: 'id-1', name: 'One' },
-      { id: 'id-2', name: 'Two' },
-      { id: 'id-3', name: 'Three' },
-      { id: 'id-4', name: 'Four' },
-      { id: 'id-5', name: 'Five' } ],
-    ['id-5', 'id-4', 'id-2', 'id-3', 'id-1'],
-    'id'
-  ))
-  res.end('<h1>Hello World!</h1><hr>')
-})
+  // Use API V1
+  app.use('/v1', APIs_V1)
 
-app.listen(port, hostname, () => {
-  // eslint-disable-next-line no-console
-  console.log(`Hello Trung Quan Dev, I am running at ${ hostname }:${ port }/`)
-})
+  // Middleware xử lí lỗi tập trung
+  app.use(errorHandlingMiddleware)
+
+  app.listen(env.APP_PORT, env.APP_HOST, () => {
+    console.log(
+      `3. Hi ${env.AUTHOR}, Back-end Server is running successfully at http://${env.APP_HOST}:${env.APP_PORT}/`
+    )
+  })
+
+  exitHook(async () => {
+    console.log('4. Server is shutting down....')
+    await CLOSE_DB()
+    console.log('5. Disconnected from MongoDB Cloud Atlas')
+  })
+}
+
+// Chỉ khi kết nối DB thành công thì mới start server back-end lên
+// IIFE
+;(async () => {
+  try {
+    console.log('1. Connecting to MongoDB Cloud Atlas')
+    await CONNECT_DB()
+    console.log('2. Connected to MongoDB Cloud Atlas')
+
+    // Khởi động Server sau khi kết nối DB thành công
+    START_SERVER()
+  } catch (error) {
+    console.error('Error during server start-up:', error)
+    process.exit(1)
+  }
+})()
